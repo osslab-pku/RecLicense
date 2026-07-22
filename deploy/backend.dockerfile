@@ -7,12 +7,16 @@
 # See https://aboutcode.org for more information about nexB OSS projects.
 #
 
-FROM --platform=linux/amd64 python:3.8-slim-buster
+# NOTE: Debian "buster" is end-of-life and its apt repositories have been
+# removed from deb.debian.org, so `apt-get update` on python:3.8-slim-buster
+# now fails with a 404. We use the still-supported "bookworm" (Debian 12)
+# base image, which keeps Python 3.8 (required by the scancode-toolkit fork).
+FROM --platform=linux/amd64 python:3.8-slim-bookworm
 
 # Python settings: Force unbuffered stdout and stderr (i.e. they are flushed to terminal immediately)
-ENV PYTHONUNBUFFERED 1
+ENV PYTHONUNBUFFERED=1
 # Python settings: do not write pyc files
-ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONDONTWRITEBYTECODE=1
 
 # OS requirements as per
 # https://scancode-toolkit.readthedocs.io/en/latest/getting-started/install.html
@@ -45,10 +49,12 @@ ENV PATH=/scancode-toolkit:$PATH
 
 # --- Flask app ---
 
-# Install java11
+# Install a JRE to run the "depends" dependency-extraction tool (backend/depends/depends.jar).
+# Debian bookworm no longer ships openjdk-11; openjdk-17-jre-headless is the default JRE
+# and runs the depends.jar without issues.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-       openjdk-11-jre-headless \
+       openjdk-17-jre-headless \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
@@ -61,6 +67,12 @@ RUN pip install -r /backend/requirements.txt
 COPY ./backend /backend
 
 WORKDIR /backend
+
+# The app logs to ./app/logging/backend.log (see logging.basicConfig in several
+# modules). That directory is git-ignored, so it is absent from the build
+# context and `flask run` would crash at import with FileNotFoundError.
+# Create it here so the container starts cleanly.
+RUN mkdir -p /backend/app/logging
 
 VOLUME [ "/backend/temp_files" ]
 

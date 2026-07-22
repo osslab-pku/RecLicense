@@ -1,0 +1,19 @@
+# Version control
+.git
+.gitignore
+
+# Docs and non-build assets
+appendix
+*.md
+
+# Frontend build artifacts / deps (rebuilt inside the image)
+frontend/node_modules
+frontend/dist
+frontend/build/*.map
+
+# Python caches
+**/__pycache__
+**/*.pyc
+
+# Local env files (provide your own at runtime)
+**/.env

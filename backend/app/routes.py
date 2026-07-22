@@ -55,7 +55,7 @@ def git_check_c(unzip_path: str):
     rem_lst = []
     if dep_tree is not None and dep_incompatible:
         logging.info("start remediation")
-        rem = get_remediation(mongo_uri = "mongodb://localhost:27017/",package='test_project',version="0.0.1",requires_dist=require_dist,dep_tree=dep_tree,license= licenses_in_files["LICENSE"][0])
+        rem = get_remediation(mongo_uri = f"mongodb://{MONGO_HOST}:27017/",package='test_project',version="0.0.1",requires_dist=require_dist,dep_tree=dep_tree,license= licenses_in_files["LICENSE"][0])
         logging.info("remediation done")
         for i in rem["changes"]:
             rem_lst.append("; ".join(i)) 

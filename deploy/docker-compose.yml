@@ -1,8 +1,10 @@
-version: "2.2"
-
 services:
   mongodb:
-    image: mongo
+    # Pinned for reproducibility. This is the version the project's DEPLOY.md
+    # documents as tested, and (unlike mongo 5.0+) it does not require a CPU
+    # with AVX support, so it runs on a wider range of hosts. Change it if you
+    # restore a dump created with a newer MongoDB.
+    image: mongo:4.4.6-bionic
     volumes:
       - ${RECLIC_DATA_DIR}/mongodb:/data/db
     command: mongod --bind_ip=0.0.0.0
@@ -41,13 +43,11 @@ services:
       dockerfile: ./deploy/frontend.dockerfile
       args:
         NODE_ENV: ${NODE_ENV:-production}
-        REACT_APP_BASE_URL: ${REACT_APP_BASE_URL:-http://localhost:5000}
     ports:
       - "${RECLIC_HTTP_PORT}:80"
       - "${RECLIC_HTTPS_PORT}:443"
     restart: always
     environment:
-      - REACT_APP_BASE_URL
       - RECLIC_DOMAIN
     logging:
       options:
