@@ -1,17 +1,29 @@
 # LicenseRec Deployment
 
 We recommend using Docker to deploy LicenseRec. If you are testing / developing LicenseRec and want goodies like HMR / auto-reload, you may refer to the manual deployment instructions.
-This setup has been tested on Ubuntu 20.04 x64 + Docker 20.10.8 + Docker Compose 1.29.2, and should work on other Debian-based Linux distributions.
+This setup has been tested on Ubuntu 20.04 x64 and again on a current Docker Engine (v29 / Compose v2). It should work on other Debian-based Linux distributions.
 
 ## Setup with Docker
 
+> The images are built from Python 3.8 (Debian **bookworm**) and Node 16 base
+> images. Older versions of this project pinned the now end-of-life
+> `python:3.8-slim-buster` base image; because Debian Buster's package
+> repositories have been retired, `apt-get` inside the build returned `404`
+> and the backend image failed to build. This has been fixed.
+
 ### Install Docker
 
-The installation of Docker is described in the [official documentation](https://docs.docker.com/engine/install/). The script below installs docker on Debian/Ubuntu:
+The installation of Docker is described in the [official documentation](https://docs.docker.com/engine/install/). Modern Docker ships Compose as a plugin (invoked as `docker compose`, not the legacy `docker-compose`). The quickest way to install a current Docker Engine + Compose plugin on Debian/Ubuntu is the official convenience script:
 
 ```bash
-sudo apt-get update
-sudo apt-get install -y docker.io docker-compose
+curl -fsSL https://get.docker.com | sudo sh
+```
+
+To confirm both are available:
+
+```bash
+docker --version
+docker compose version
 ```
 
 ### Run Containers
@@ -24,10 +36,11 @@ The MongoDB database is pulled from the official Docker Hub. The backend and the
 
 #### 1. Edit `.env`
 
-The `.env` file defines the environment variables for the backend and the frontend.
+The `.env` file defines the environment variables for the backend and the frontend. A ready-to-edit template lives at `deploy/example.env`. Copy it to `deploy/.env` (Docker Compose reads `.env` from the directory you run it in):
 
 ```bash
-cp .env.example .env
+cd deploy
+cp example.env .env
 vim .env  # or any other editor
 ```
 
@@ -41,9 +54,9 @@ RECLIC_BACKEND_PORT=127.0.0.1:5000
 # Website port exposed to the host
 RECLIC_HTTPS_PORT=443
 RECLIC_HTTP_PORT=80
-# Data directory (Flask app and MongoDB)
-RECLIC_DATA_DIR=~/reclic-data
-# Domain
+# Data directory (Flask app and MongoDB). Must be an ABSOLUTE path.
+RECLIC_DATA_DIR=/srv/reclic-data
+# Domain served by Caddy (use `localhost` for local testing)
 RECLIC_DOMAIN=dev.licenserec.com
 # Container name (Docker container name prefix)
 COMPOSE_PROJECT_NAME=reclic_sample
@@ -51,39 +64,53 @@ COMPOSE_PROJECT_NAME=reclic_sample
 GITHUB_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
+> **Note:** Docker Compose does **not** expand `~` or run `$(...)` in the
+> `.env` file. Use a literal, absolute path for `RECLIC_DATA_DIR` (e.g.
+> `/srv/reclic-data`, not `~/reclic-data`) and a literal value for
+> `COMPOSE_PROJECT_NAME` (not `reclic_$(whoami)`).
+>
+> In production `RECLIC_DOMAIN` must be a real, publicly-resolvable domain so
+> that Caddy can obtain a Let's Encrypt certificate. For local testing set it
+> to `localhost`; Caddy then serves an internally-signed certificate over
+> HTTPS and redirects HTTP to HTTPS.
+
 #### 2. Run Containers
 
 ```bash
 cd deploy
-sudo docker-compose up -d
+sudo docker compose up -d
 ```
+
+The first run builds the backend and frontend images (the backend build runs
+scancode-toolkit's one-time configuration, so it can take several minutes) and
+pulls the MongoDB image.
 
 #### 3. Check Containers
 
 ```bash
-sudo docker ps
+sudo docker compose ps
 ```
 
-You should see the following containers:
+You should see the three containers `Up`:
 
 ```bash
-CONTAINER ID   IMAGE                 COMMAND                  CREATED          STATUS          PORTS                                                                 NAMES
-c0e1b0b8b8b0   reclic_sample_frontend   "/bin/caddy run …"   20 seconds ago   Up 19 seconds
-f1b1b0b8b8b0   reclic_sample_backend   "flask run …"         20 seconds ago   Up 19 seconds
-e0e1b0b8b8b0   mongo:4.4.6-bionic   "docker-entrypoint.s…"   20 seconds ago   Up 19 seconds
+NAME                       IMAGE                   COMMAND                  SERVICE    STATUS
+reclic_sample-frontend-1   reclic_sample-frontend  "caddy run --config …"   frontend   Up
+reclic_sample-backend-1    reclic_sample-backend   "flask run --port 50…"   backend    Up
+reclic_sample-mongodb-1    mongo:4.4.6-bionic      "docker-entrypoint.s…"   mongodb    Up
 ```
 
 #### 4. Check Logs
 
 ```bash
-sudo docker logs -f reclic_sample_backend
-sudo docker logs -f reclic_sample_frontend
+sudo docker compose logs -f backend
+sudo docker compose logs -f frontend
 ```
 
 #### 5. Stop Containers
 
 ```bash
-sudo docker-compose down
+sudo docker compose down
 ```
 
 ## Manual Deployment
@@ -177,6 +204,9 @@ echo "YOUR_GITHUB_TOKEN" > ./backend/app/token
 # or:
 # export GITHUB_TOKEN=YOUR_GITHUB_TOKEN
 cd ./backend
+# The app writes logs to app/logging/backend.log. This directory is
+# git-ignored, so create it before the first run or Flask will fail to start.
+mkdir -p app/logging
 flask run --host=127.0.0.1 --port=5000
 (Ctrl+A+D to detach)
 ```
